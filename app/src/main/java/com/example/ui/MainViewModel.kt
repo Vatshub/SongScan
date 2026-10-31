@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -215,11 +216,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateBpm(newBpm: Double) {
         val current = _currentAnalysis.value ?: return
-        val updated = current.copy(bpm = newBpm)
+        val clamped = ((newBpm * 10.0).roundToInt() / 10.0).coerceIn(40.0, 240.0)
+        val updated = current.copy(bpm = clamped)
         _currentAnalysis.value = updated
         viewModelScope.launch(Dispatchers.IO) {
             dao.updateAnalysis(SongAnalysisEntity.fromDomain(updated))
         }
+    }
+
+    fun halveBpm() {
+        val current = _currentAnalysis.value ?: return
+        updateBpm(current.bpm / 2.0)
+    }
+
+    fun doubleBpm() {
+        val current = _currentAnalysis.value ?: return
+        updateBpm(current.bpm * 2.0)
     }
 
     fun selectHistoryItem(item: SongAnalysis) {

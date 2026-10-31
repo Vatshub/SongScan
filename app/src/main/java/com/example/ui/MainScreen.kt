@@ -388,7 +388,9 @@ fun MainScreen(viewModel: MainViewModel) {
                         analysis = analysis,
                         isPlaying = isPlaying,
                         onOpenTapBpm = { showTapBpmDialog = true },
-                        onOpenCamelot = { showCamelotDialog = true }
+                        onOpenCamelot = { showCamelotDialog = true },
+                        onHalveBpm = { viewModel.halveBpm() },
+                        onDoubleBpm = { viewModel.doubleBpm() }
                     )
                 }
 

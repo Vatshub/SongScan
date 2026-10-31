@@ -31,7 +31,7 @@ object AudioFeatureAnalyzer {
         delay(150)
 
         onProgress("Detecting BPM tempo & onset peaks...", 0.55f)
-        val detectedBpm = detectBpm(waveform, meta.durationMs, meta.title)
+        val detectedBpm = AudioBpmDetector.detectBpmFromAudio(context, uri, meta.durationMs)
         delay(150)
 
         onProgress("Harmonic analysis & Key identification...", 0.75f)

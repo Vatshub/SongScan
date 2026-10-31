@@ -62,6 +62,8 @@ fun MetricCardsGrid(
     isPlaying: Boolean,
     onOpenTapBpm: () -> Unit,
     onOpenCamelot: () -> Unit,
+    onHalveBpm: () -> Unit = {},
+    onDoubleBpm: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // BPM Pulse animation synced to tempo when playing
@@ -168,20 +170,62 @@ fun MetricCardsGrid(
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.TouchApp,
-                        contentDescription = null,
-                        tint = NeonCyan,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Tap to refine",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = NeonCyan
-                    )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(StudioSurfaceElevated)
+                            .clickable { onHalveBpm() }
+                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "÷2",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = NeonCyan
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(StudioSurfaceElevated)
+                            .clickable { onDoubleBpm() }
+                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "×2",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = NeonCyan
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { onOpenTapBpm() }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.TouchApp,
+                            contentDescription = null,
+                            tint = NeonPink,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text(
+                            text = "Tap",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = NeonPink,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
         }
