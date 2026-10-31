@@ -866,7 +866,7 @@ private fun ArrangementNotesCard(analysis: SongAnalysis) {
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "SUGGESTED CHORD PROGRESSIONS",
+                text = "DETECTED CHORD PATTERNS",
                 style = MaterialTheme.typography.labelSmall,
                 color = TextMuted,
                 fontWeight = FontWeight.Bold
@@ -898,7 +898,7 @@ private fun ArrangementNotesCard(analysis: SongAnalysis) {
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "SUBGENRES & TAGS",
+                text = "TAGS",
                 style = MaterialTheme.typography.labelSmall,
                 color = TextMuted,
                 fontWeight = FontWeight.Bold
@@ -1001,7 +1001,7 @@ private fun EmptyUploadHero(onUploadClick: () -> Unit) {
             Spacer(modifier = Modifier.height(6.dp))
 
             Text(
-                text = "Analyze exact duration, BPM tempo, musical key & scale, genre, and full structural segmentation into Chorus, Verse, and Bridge.",
+                text = "Measures tempo, musical key, chords and song sections (intro, verse, chorus and more) from the audio itself.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextSecondary,
                 modifier = Modifier.padding(horizontal = 12.dp)

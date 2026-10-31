@@ -5,7 +5,6 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.analyzer.AudioFeatureAnalyzer
-import com.example.analyzer.AudioSynthesizer
 import com.example.data.local.AppDatabase
 import com.example.data.local.SongAnalysisEntity
 import com.example.data.model.SongAnalysis
@@ -49,7 +48,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
-        // Pre-load default featured demo track ("Neon Horizon")
+        // Pre-load the SongScan test song so the screen is not empty on first launch
         viewModelScope.launch {
             val presets = AudioFeatureAnalyzer.getPresetDemos()
             if (presets.isNotEmpty()) {
@@ -159,20 +158,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun loadPresetDemo(preset: AudioFeatureAnalyzer.PresetTrack, autoPlay: Boolean = true) {
         viewModelScope.launch {
             _isAnalyzing.value = true
-            _analysisStep.value = "Synthesizing demo track (${preset.title})..."
+            _analysisStep.value = "Preparing the test song..."
             _analysisProgress.value = 0.25f
 
             try {
-                // Synthesize actual playable PCM audio WAV in cache
+                // Write the SongScan test song (known structure) to the cache
                 val wavFile = withContext(Dispatchers.IO) {
-                    AudioSynthesizer.synthesizeSong(
-                        context = getApplication(),
-                        fileName = preset.id,
-                        durationSeconds = (preset.durationMs / 1000).toInt(),
-                        bpm = preset.bpm,
-                        baseFreq = preset.baseFreq,
-                        genre = preset.genre
-                    )
+                    AudioFeatureAnalyzer.writeTestSong(getApplication())
                 }
 
                 _analysisStep.value = "Running acoustic analysis..."
@@ -191,10 +183,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val entity = SongAnalysisEntity.fromDomain(
                     analysis.copy(
                         title = preset.title,
-                        artist = preset.artist,
-                        bpm = preset.bpm,
-                        key = preset.key,
-                        genre = preset.genre
+                        artist = preset.artist
                     )
                 )
                 val id = withContext(Dispatchers.IO) {
