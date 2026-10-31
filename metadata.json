@@ -1,5 +1,5 @@
 {
-  "name": "TrackScan",
+  "name": "SongScan",
   "description": "Music analyzer for songs: calculates duration, BPM tempo, musical key & scale, genre, and full structural segmentation (chorus, verse, bridge).",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

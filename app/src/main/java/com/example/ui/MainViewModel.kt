@@ -91,6 +91,70 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun analyzeAudioUrl(url: String) {
+        viewModelScope.launch {
+            _isAnalyzing.value = true
+            _errorMessage.value = null
+            _analysisProgress.value = 0.1f
+            _analysisStep.value = "Downloading audio from link..."
+
+            try {
+                val tempFile = withContext(Dispatchers.IO) {
+                    val client = okhttp3.OkHttpClient.Builder()
+                        .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                        .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                        .followRedirects(true)
+                        .build()
+
+                    val request = okhttp3.Request.Builder()
+                        .url(url.trim())
+                        .build()
+
+                    val response = client.newCall(request).execute()
+                    if (!response.isSuccessful) {
+                        throw java.io.IOException("HTTP error code ${response.code}")
+                    }
+
+                    val body = response.body ?: throw java.io.IOException("Empty audio response body")
+                    val ext = when {
+                        url.contains(".wav", ignoreCase = true) -> "wav"
+                        url.contains(".m4a", ignoreCase = true) -> "m4a"
+                        url.contains(".flac", ignoreCase = true) -> "flac"
+                        else -> "mp3"
+                    }
+                    val file = java.io.File(getApplication<Application>().cacheDir, "imported_song_${System.currentTimeMillis()}.$ext")
+                    file.outputStream().use { fos ->
+                        body.byteStream().copyTo(fos)
+                    }
+                    file
+                }
+
+                _analysisStep.value = "Running acoustic analysis..."
+                _analysisProgress.value = 0.45f
+
+                val uri = Uri.fromFile(tempFile)
+                val analysis = AudioFeatureAnalyzer.analyzeAudio(
+                    context = getApplication(),
+                    uri = uri
+                ) { step, progress ->
+                    _analysisStep.value = step
+                    _analysisProgress.value = progress
+                }
+
+                val entity = SongAnalysisEntity.fromDomain(analysis)
+                val newId = withContext(Dispatchers.IO) {
+                    dao.insertAnalysis(entity)
+                }
+                _currentAnalysis.value = analysis.copy(id = newId)
+                audioPlayer.loadAndPlayFile(tempFile)
+            } catch (e: Exception) {
+                _errorMessage.value = "Could not load audio from URL: ${e.localizedMessage ?: "Check link and try again"}"
+            } finally {
+                _isAnalyzing.value = false
+            }
+        }
+    }
+
     fun loadPresetDemo(preset: AudioFeatureAnalyzer.PresetTrack, autoPlay: Boolean = true) {
         viewModelScope.launch {
             _isAnalyzing.value = true

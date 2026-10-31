@@ -37,6 +37,9 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
@@ -57,6 +60,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
@@ -127,6 +132,8 @@ fun MainScreen(viewModel: MainViewModel) {
     var showTapBpmDialog by remember { mutableStateOf(false) }
     var showCamelotDialog by remember { mutableStateOf(false) }
     var showHistorySheet by remember { mutableStateOf(false) }
+    var showUploadSheet by remember { mutableStateOf(false) }
+    var audioUrlInput by remember { mutableStateOf("") }
     var selectedTab by remember { mutableIntStateOf(0) }
 
     val filePicker = rememberLauncherForActivityResult(
@@ -176,17 +183,18 @@ fun MainScreen(viewModel: MainViewModel) {
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "TrackScan",
+                                text = "SongScan",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Black,
                                 color = TextPrimary
                             )
                             Text(
-                                text = "A Property of Sound of Drip Musictech Private Limited",
+                                text = "SOUND OF DRIP MUSICTECH PRIVATE LIMITED",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     textDecoration = TextDecoration.Underline,
-                                    fontSize = 8.5.sp,
-                                    fontWeight = FontWeight.Medium
+                                    fontSize = 8.sp,
+                                    letterSpacing = 0.5.sp,
+                                    fontWeight = FontWeight.SemiBold
                                 ),
                                 color = NeonCyan,
                                 maxLines = 1,
@@ -208,7 +216,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
 
                     Button(
-                        onClick = { filePicker.launch("audio/*") },
+                        onClick = { showUploadSheet = true },
                         colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
@@ -449,12 +457,190 @@ fun MainScreen(viewModel: MainViewModel) {
             } else if (!isAnalyzing) {
                 // Empty Welcome State
                 item {
-                    EmptyUploadHero(onUploadClick = { filePicker.launch("audio/*") })
+                    EmptyUploadHero(onUploadClick = { showUploadSheet = true })
                 }
             }
 
             item {
                 Spacer(modifier = Modifier.height(30.dp))
+            }
+        }
+    }
+
+    // Upload & Import Audio Modal Bottom Sheet
+    if (showUploadSheet) {
+        val uploadSheetState = rememberModalBottomSheetState()
+        ModalBottomSheet(
+            onDismissRequest = { showUploadSheet = false },
+            sheetState = uploadSheetState,
+            containerColor = StudioSurface,
+            modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "Upload or Import Audio",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+
+                // Option 1: Direct Web Link (Ideal for testing from PC!)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = StudioSurfaceCard),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.4f))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Link,
+                                contentDescription = null,
+                                tint = NeonCyan,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Analyze from Web Audio URL",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Paste a direct web link to any MP3, WAV, or audio file from Google Drive, Dropbox, or the web:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        OutlinedTextField(
+                            value = audioUrlInput,
+                            onValueChange = { audioUrlInput = it },
+                            placeholder = { Text("https://example.com/mysong.mp3", fontSize = 12.sp, color = TextMuted) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = NeonCyan,
+                                unfocusedBorderColor = StudioSurfaceElevated,
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary
+                            ),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Button(
+                            onClick = {
+                                if (audioUrlInput.isNotBlank()) {
+                                    viewModel.analyzeAudioUrl(audioUrlInput.trim())
+                                    showUploadSheet = false
+                                }
+                            },
+                            enabled = audioUrlInput.isNotBlank(),
+                            colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Download & Analyze Song", color = Color.Black, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // Option 2: Device File Picker
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = StudioSurfaceCard)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.FolderOpen,
+                                contentDescription = null,
+                                tint = NeonPurple,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Device Storage File Picker",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Open Android file explorer to pick MP3, WAV, M4A, FLAC from local storage.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        OutlinedButton(
+                            onClick = {
+                                showUploadSheet = false
+                                filePicker.launch("audio/*")
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FileUpload,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Browse Files on Device")
+                        }
+                    }
+                }
+
+                // Helpful Info Card explaining Cloud Emulator behavior
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = StudioSurfaceElevated.copy(alpha = 0.5f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = NeonAmber,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Why is the file picker empty in your browser? The preview runs inside a cloud Android emulator with separate virtual storage from your computer. You can paste an audio URL above, or download files inside the emulator's Chrome browser, or test the built-in preset songs.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp
+                        )
+                    }
+                }
             }
         }
     }
