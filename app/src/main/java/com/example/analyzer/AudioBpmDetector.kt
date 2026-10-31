@@ -167,7 +167,7 @@ object AudioBpmDetector {
     /**
      * Reads ID3v2 TBPM (Beats Per Minute) frame directly from the audio header
      */
-    private fun readId3BpmTag(context: Context, uri: Uri): Double? {
+    internal fun readId3BpmTag(context: Context, uri: Uri): Double? {
         try {
             context.contentResolver.openInputStream(uri)?.use { stream ->
                 val header = ByteArray(10)
