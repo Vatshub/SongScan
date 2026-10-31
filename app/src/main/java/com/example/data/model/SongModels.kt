@@ -9,7 +9,9 @@ enum class SectionType(val displayName: String, val defaultColorHex: Long) {
     CHORUS("Chorus", 0xFFEC4899),      // Pink/Magenta (Primary hook)
     BRIDGE("Bridge", 0xFF10B981),      // Emerald green
     SOLO("Solo / Drop", 0xFF8B5CF6),   // Purple
-    OUTRO("Outro", 0xFF64748B);        // Slate
+    OUTRO("Outro", 0xFF64748B),        // Slate
+    BREAK("Break", 0xFF14B8A6),        // Teal (quieter middle section)
+    PART("Section", 0xFF94A3B8);       // Grey (section without a clear name)
 
     fun toComposeColor(): Color = Color(defaultColorHex)
 }
