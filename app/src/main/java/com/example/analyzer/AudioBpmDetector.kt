@@ -6,19 +6,31 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
 import android.util.Log
+import java.io.InputStream
 import java.nio.ByteBuffer
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 object AudioBpmDetector {
     private const val TAG = "AudioBpmDetector"
 
     /**
-     * Accurately detects song BPM by decoding 20-30 seconds of audio PCM,
-     * computing the onset energy novelty curve, and running autocorrelation.
+     * Detects song BPM with high accuracy by:
+     * 1. Inspecting ID3 TBPM metadata frame (ground-truth studio BPM if tagged).
+     * 2. High-resolution PCM audio decoding with MediaCodec at 200 Hz frame rate.
+     * 3. Harmonic comb-filter resonator autocorrelation that rejects cross-rhythms (e.g. 4/5 or 3/2).
      */
     fun detectBpmFromAudio(context: Context, uri: Uri, totalDurationMs: Long): Double {
+        // Step 1: Check for embedded ID3 TBPM frame
+        val taggedBpm = readId3BpmTag(context, uri)
+        if (taggedBpm != null && taggedBpm in 50.0..220.0) {
+            Log.d(TAG, "Found embedded ID3 TBPM tag: $taggedBpm")
+            return (taggedBpm * 10.0).roundToInt() / 10.0
+        }
+
+        // Step 2: High-resolution acoustic decoding
         var extractor: MediaExtractor? = null
         var codec: MediaCodec? = null
 
@@ -39,7 +51,7 @@ object AudioBpmDetector {
             }
 
             if (audioTrackIndex == -1 || format == null) {
-                return fallbackBpmFromStream(context, uri)
+                return 120.0
             }
 
             extractor.selectTrack(audioTrackIndex)
@@ -48,36 +60,37 @@ object AudioBpmDetector {
             codec.configure(format, null, null, 0)
             codec.start()
 
-            // Seek to ~25% into the song to capture the main beat/rhythm groove rather than intro silence
-            val seekTargetUs = if (totalDurationMs > 30000L) {
+            // Seek ~20% into the song to capture the main rhythmic groove
+            val seekTargetUs = if (totalDurationMs > 25000L) {
                 (totalDurationMs * 0.20 * 1000).toLong()
             } else 0L
             extractor.seekTo(seekTargetUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
 
-            val sampleRate = if (format.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
+            var actualSampleRate = if (format.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
                 format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
             } else 44100
 
-            val channelCount = if (format.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
+            var actualChannels = if (format.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
                 format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
             } else 2
 
-            // We analyze up to 20 seconds of audio
-            val maxSamplesToAnalyze = sampleRate * 20
-            var samplesCollected = 0
-
-            // Energy frame: 1024 samples (~23ms at 44.1kHz -> ~43 frames/sec)
-            val windowSize = 1024
+            // High resolution frame size: ~220 samples at 44.1kHz (~200 frames per second = 5ms resolution)
+            val hopSize = (actualSampleRate / 200).coerceAtLeast(128)
             val energyList = mutableListOf<Float>()
-            var currentWindowSum = 0.0
-            var currentWindowCount = 0
+            var currentHopSum = 0.0
+            var currentHopCount = 0
+
+            val maxDurationSec = 22
+            val maxSamplesToAnalyze = actualSampleRate * maxDurationSec
+            var samplesCollected = 0
 
             val bufferInfo = MediaCodec.BufferInfo()
             var isEOS = false
-            var timeoutCount = 0
+            var iterations = 0
 
-            while (samplesCollected < maxSamplesToAnalyze && !isEOS && timeoutCount < 50) {
-                val inIndex = codec.dequeueInputBuffer(10000L)
+            while (samplesCollected < maxSamplesToAnalyze && !isEOS && iterations < 3000) {
+                iterations++
+                val inIndex = codec.dequeueInputBuffer(5000L)
                 if (inIndex >= 0) {
                     val inputBuffer = codec.getInputBuffer(inIndex)
                     if (inputBuffer != null) {
@@ -93,9 +106,16 @@ object AudioBpmDetector {
                     }
                 }
 
-                val outIndex = codec.dequeueOutputBuffer(bufferInfo, 10000L)
-                if (outIndex >= 0) {
-                    timeoutCount = 0
+                val outIndex = codec.dequeueOutputBuffer(bufferInfo, 5000L)
+                if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    val newFormat = codec.outputFormat
+                    if (newFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
+                        actualSampleRate = newFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                    }
+                    if (newFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
+                        actualChannels = newFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                    }
+                } else if (outIndex >= 0) {
                     val outputBuffer = codec.getOutputBuffer(outIndex)
                     if (outputBuffer != null && bufferInfo.size > 0) {
                         outputBuffer.position(bufferInfo.offset)
@@ -105,109 +125,154 @@ object AudioBpmDetector {
                         val numShorts = shortBuffer.remaining()
 
                         var s = 0
+                        val step = actualChannels.coerceAtLeast(1)
                         while (s < numShorts && samplesCollected < maxSamplesToAnalyze) {
-                            val sample = shortBuffer.get(s)
-                            val absVal = abs(sample.toInt())
-                            currentWindowSum += (absVal * absVal)
-                            currentWindowCount++
+                            val sample = shortBuffer.get(s).toInt()
+                            currentHopSum += (sample.toDouble() * sample.toDouble())
+                            currentHopCount++
 
-                            if (currentWindowCount >= windowSize) {
-                                val rms = kotlin.math.sqrt(currentWindowSum / currentWindowCount).toFloat()
+                            if (currentHopCount >= hopSize) {
+                                val rms = sqrt(currentHopSum / currentHopCount).toFloat()
                                 energyList.add(rms)
-                                currentWindowSum = 0.0
-                                currentWindowCount = 0
+                                currentHopSum = 0.0
+                                currentHopCount = 0
                             }
 
-                            s += channelCount // Skip channels to mono
+                            s += step
                             samplesCollected++
                         }
                     }
                     codec.releaseOutputBuffer(outIndex, false)
-                } else {
-                    timeoutCount++
                 }
             }
 
-            if (energyList.size > 100) {
-                val frameRate = sampleRate.toDouble() / windowSize
-                val detected = computeBpmFromEnergyNovelty(energyList, frameRate)
-                if (detected > 55.0 && detected < 210.0) {
+            if (energyList.size > 300) {
+                val frameRate = actualSampleRate.toDouble() / hopSize
+                val detected = computeHarmonicCombBpm(energyList, frameRate)
+                if (detected in 55.0..215.0) {
                     return detected
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "MediaCodec BPM detection failed, falling back", e)
+            Log.e(TAG, "Audio decoding BPM error", e)
         } finally {
             try { codec?.stop() } catch (_: Exception) {}
             try { codec?.release() } catch (_: Exception) {}
             try { extractor?.release() } catch (_: Exception) {}
         }
 
-        return fallbackBpmFromStream(context, uri)
+        return 120.0
     }
 
     /**
-     * Calculates onset novelty function (spectral flux proxy) and evaluates autocorrelation
-     * across lags corresponding to 65 to 190 BPM.
+     * Reads ID3v2 TBPM (Beats Per Minute) frame directly from the audio header
      */
-    private fun computeBpmFromEnergyNovelty(energy: List<Float>, frameRate: Double): Double {
+    private fun readId3BpmTag(context: Context, uri: Uri): Double? {
+        try {
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                val header = ByteArray(10)
+                val readHeader = stream.read(header)
+                if (readHeader == 10 && header[0] == 'I'.code.toByte() && header[1] == 'D'.code.toByte() && header[2] == '3'.code.toByte()) {
+                    // ID3v2 header found, read up to 64KB to search for TBPM frame
+                    val buffer = ByteArray(65536)
+                    val readData = stream.read(buffer)
+                    if (readData > 10) {
+                        for (i in 0 until readData - 8) {
+                            if (buffer[i] == 'T'.code.toByte() &&
+                                buffer[i + 1] == 'B'.code.toByte() &&
+                                buffer[i + 2] == 'P'.code.toByte() &&
+                                buffer[i + 3] == 'M'.code.toByte()
+                            ) {
+                                // Frame size is at i+4..i+7 (syncsafe or int)
+                                var frameSize = (buffer[i + 7].toInt() and 0xFF)
+                                if (frameSize in 1..15) {
+                                    val start = i + 10 // skip frame header + encoding byte
+                                    val strBytes = buffer.copyOfRange(start, (start + frameSize).coerceAtMost(readData))
+                                    val text = String(strBytes, Charsets.ISO_8859_1).filter { it.isDigit() || it == '.' }
+                                    val bpmVal = text.toDoubleOrNull()
+                                    if (bpmVal != null && bpmVal in 40.0..240.0) {
+                                        return bpmVal
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return null
+    }
+
+    /**
+     * Computes onset novelty curve and applies a harmonic comb-filter autocorrelation.
+     * Harmonic comb summation reinforces true beat multiples (T, 2T) and suppresses
+     * fractional cross-rhythms (e.g. 4/5, 3/4).
+     */
+    private fun computeHarmonicCombBpm(energy: List<Float>, frameRate: Double): Double {
         val n = energy.size
-        // 1. First-order difference: half-wave rectified onset strength
+        // 1. Half-wave rectified onset novelty function
         val onsets = DoubleArray(n)
         for (i in 1 until n) {
             val diff = (energy[i] - energy[i - 1]).toDouble()
             onsets[i] = if (diff > 0) diff else 0.0
         }
 
-        // Subtract local moving average to enhance rhythmic transients
-        val smoothWindow = (frameRate * 0.15).toInt().coerceAtLeast(3)
-        val normalized = DoubleArray(n)
+        // Adaptive moving threshold subtraction to isolate sharp rhythmic beats
+        val window = (frameRate * 0.12).toInt().coerceAtLeast(3)
+        val novelty = DoubleArray(n)
         for (i in 0 until n) {
-            val start = (i - smoothWindow).coerceAtLeast(0)
-            val end = (i + smoothWindow).coerceAtMost(n)
+            val start = (i - window).coerceAtLeast(0)
+            val end = (i + window).coerceAtMost(n)
             var sum = 0.0
             for (j in start until end) sum += onsets[j]
-            val localMean = sum / (end - start)
-            normalized[i] = max(0.0, onsets[i] - localMean)
+            val mean = sum / (end - start)
+            novelty[i] = max(0.0, onsets[i] - mean)
         }
 
-        // 2. Autocorrelation for BPM search range [65 .. 185]
-        val minBpm = 65.0
-        val maxBpm = 185.0
-        val minLag = (frameRate * 60.0 / maxBpm).roundToInt().coerceAtLeast(4)
-        val maxLag = (frameRate * 60.0 / minBpm).roundToInt().coerceAtMost(n / 2)
+        // 2. Precompute standard Autocorrelation array
+        val maxLag = (frameRate * 60.0 / 60.0).roundToInt().coerceAtMost(n / 2) // down to 60 BPM
+        val ac = DoubleArray(maxLag + 1)
 
-        var bestLag = -1
-        var maxCorrelation = -1.0
-
-        for (lag in minLag..maxLag) {
-            var corr = 0.0
+        for (lag in 1..maxLag) {
+            var sum = 0.0
             val count = n - lag
             for (i in 0 until count) {
-                corr += normalized[i] * normalized[i + lag]
+                sum += novelty[i] * novelty[i + lag]
             }
-
-            // Apply slight musical perceptual prior (preferring 90-135 BPM range)
-            val testBpm = (frameRate * 60.0) / lag
-            val tempoPrior = if (testBpm in 90.0..138.0) 1.15 else 1.0
-            val weightedCorr = (corr / count) * tempoPrior
-
-            if (weightedCorr > maxCorrelation) {
-                maxCorrelation = weightedCorr
-                bestLag = lag
-            }
+            ac[lag] = sum / count
         }
 
-        if (bestLag > 0) {
-            val rawBpm = (frameRate * 60.0) / bestLag
-            return (rawBpm * 10.0).roundToInt() / 10.0
+        // 3. Harmonic Comb Resonator across candidate BPMs (65.0 to 185.0 in 0.5 BPM steps)
+        var bestBpm = 120.0
+        var maxHarmonicScore = -1.0
+
+        var testBpm = 65.0
+        while (testBpm <= 185.0) {
+            val lag = (frameRate * 60.0 / testBpm).roundToInt()
+            if (lag in 1 until maxLag) {
+                val r0 = ac[lag]
+                // 2x lag (the 2-beat measure harmonic, strongly present in 4/4 time)
+                val lag2 = lag * 2
+                val r2 = if (lag2 <= maxLag) ac[lag2] else 0.0
+                // Half lag (8th note harmonic)
+                val lagHalf = lag / 2
+                val rHalf = if (lagHalf in 1..maxLag) ac[lagHalf] else 0.0
+
+                // Comb sum: fundamental + 0.65 * double_lag + 0.35 * half_lag
+                var score = r0 + 0.65 * r2 + 0.35 * rHalf
+
+                // Slight musical prior favoring common radio / dance tempo range (90 - 135)
+                val prior = if (testBpm in 90.0..135.0) 1.10 else 1.0
+                score *= prior
+
+                if (score > maxHarmonicScore) {
+                    maxHarmonicScore = score
+                    bestBpm = testBpm
+                }
+            }
+            testBpm += 0.5
         }
 
-        return 120.0
-    }
-
-    private fun fallbackBpmFromStream(context: Context, uri: Uri): Double {
-        // Fast peak interval detection from audio stream bytes
-        return 120.0
+        return (bestBpm * 10.0).roundToInt() / 10.0
     }
 }

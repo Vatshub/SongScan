@@ -9,6 +9,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -147,13 +148,35 @@ fun TapTempoDialog(
 
                 Spacer(modifier = Modifier.height(18.dp))
 
-                // BPM Big Display
-                Text(
-                    text = "%.1f".format(calculatedBpm.doubleValue),
-                    style = MaterialTheme.typography.displayMedium,
-                    fontWeight = FontWeight.Black,
-                    color = TextPrimary
-                )
+                // BPM Display with steppers
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    IconButton(
+                        onClick = { calculatedBpm.doubleValue = (calculatedBpm.doubleValue - 1).coerceAtLeast(40.0) }
+                    ) {
+                        Text("-1", color = NeonCyan, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Text(
+                        text = "%.1f".format(calculatedBpm.doubleValue),
+                        style = MaterialTheme.typography.displayMedium,
+                        fontWeight = FontWeight.Black,
+                        color = TextPrimary
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    IconButton(
+                        onClick = { calculatedBpm.doubleValue = (calculatedBpm.doubleValue + 1).coerceAtMost(240.0) }
+                    ) {
+                        Text("+1", color = NeonCyan, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                    }
+                }
+
                 Text(
                     text = "BEATS PER MINUTE",
                     style = MaterialTheme.typography.labelSmall,
@@ -161,6 +184,29 @@ fun TapTempoDialog(
                     color = NeonPink,
                     fontWeight = FontWeight.Bold
                 )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Quick Multipliers: ÷2 and ×2
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = { calculatedBpm.doubleValue = (calculatedBpm.doubleValue / 2.0).coerceAtLeast(40.0) },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("÷2 (Half)", fontSize = 11.sp, color = NeonCyan)
+                    }
+                    OutlinedButton(
+                        onClick = { calculatedBpm.doubleValue = (calculatedBpm.doubleValue * 2.0).coerceAtMost(240.0) },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("×2 (Double)", fontSize = 11.sp, color = NeonCyan)
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
