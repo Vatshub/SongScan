@@ -289,7 +289,7 @@ fun MetricCardsGrid(
 
             // Genre Card
             MetricCard(
-                title = "Genre & Mood",
+                title = "Character",
                 icon = Icons.Default.Style,
                 iconTint = NeonAmber,
                 modifier = Modifier
@@ -312,7 +312,7 @@ fun MetricCardsGrid(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Danceability: ${(analysis.danceability * 100).toInt()}%",
+                    text = "Beat clarity: ${(analysis.danceability * 100).toInt()}%",
                     style = MaterialTheme.typography.labelSmall,
                     color = NeonAmber
                 )
